@@ -30,6 +30,24 @@ stable-diffusion-webui/
 別の場所に置きたい場合は、WebUI の **Settings** → **Model Stash** でフォルダを指定できる。
 ただし `models/Stable-diffusion/` の中（サブフォルダを含む）を指定すると、通常の一覧にも出てしまう。
 
+## 使い方
+
+txt2img / img2img の下にある **Model Stash** を開く。
+
+- **しまう**：「通常のモデル」で選んだモデルを `models/Stash/` に移動する
+- **戻す**：「しまったモデル」で選んだモデルを `models/Stable-diffusion/` に戻す
+
+フォルダの階層はそのまま保たれる。
+
+```
+models/Stable-diffusion/AAA/BB.safetensors  ⇄  models/Stash/AAA/BB.safetensors
+```
+
+同じフォルダにある同じ名前の付属ファイル（`BB.preview.png`、`BB.yaml`、`BB.civitai.info`、`BB.vae.safetensors` など）も一緒に移動する。
+移動先に同じ名前のファイルがあるときは何もしない。
+
+移動したあと、通常のモデル一覧に反映するには、そちらの 🔄 を押す。
+
 ## ファイル構成
 
 ```
