@@ -34,10 +34,22 @@ stable-diffusion-webui/
 
 txt2img / img2img の下にある **Model Stash** を開く。
 
+- **通常のモデル ＋ しまう**：選んだモデルを `models/Stash/` に移動する
 - **しまったモデル**：`models/Stash/` に置いたモデルの一覧。サブフォルダの中も表示する
+- **戻す**：選んだモデルを `models/Stable-diffusion/` に戻す
 - **🔄 一覧を更新**：フォルダにモデルを追加・削除したあとに押す
 - **上書きに設定**：選んだモデルを txt2img / img2img の **Override settings** 欄に `Model hash: xxxxxxxxxx` として入れる。
   Override settings 欄の × で外すまで、生成にはこのモデルが使われる。外すと次の生成から通常のモデルに戻る
+
+しまう・戻すときは、フォルダの階層をそのまま保つ。
+
+```
+models/Stable-diffusion/AAA/BB.safetensors  ⇄  models/Stash/AAA/BB.safetensors
+```
+
+同じフォルダにある同じ名前の付属ファイル（`BB.preview.png`、`BB.yaml`、`BB.civitai.info`、`BB.vae.safetensors` など）も一緒に移動する。
+移動先に同じ名前のファイルがあるときは何もしない。
+移動したあと、通常のモデル一覧に反映するには、そちらの 🔄 を押す。
 
 上書きに設定したとき、そのモデルのハッシュを初めて計算する場合は少し時間がかかる（2回目からはキャッシュを使う）。
 通常のモデル一覧の表示は変わらないので、実際に使われたモデルは生成結果の `Model:` / `Model hash:` で確認する。

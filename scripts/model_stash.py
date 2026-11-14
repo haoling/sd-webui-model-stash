@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import gradio as gr
 from modules import hashes, paths, scripts, script_callbacks, sd_models, shared
@@ -9,6 +10,14 @@ OVERRIDE_PREFIX = "Model hash:"
 DEFAULT_STASH_DIR = os.path.join(paths.models_path, "Stash")  # WebUI の models/Stash
 MODEL_EXTS = (".safetensors", ".ckpt")
 VAE_EXTS = (".vae.safetensors", ".vae.ckpt")  # A1111 と同じく VAE はモデル扱いしない
+
+# モデルと一緒に移動する付属ファイル (「モデル名 + これ」という名前のもの)
+SIDECAR_SUFFIXES = (
+    ".yaml", ".json", ".info", ".civitai.info", ".txt",
+    ".png", ".jpg", ".jpeg", ".webp",
+    ".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
+    ".vae.pt", ".vae.ckpt", ".vae.safetensors",
+)
 
 
 def stash_dir():
@@ -39,15 +48,128 @@ def list_stashed():
     return list_models_in(stash_dir())
 
 
-def stashed_path(rel):
-    """しまったモデルの絶対パス。フォルダの外を指していたら None"""
-    root = stash_dir()
+def checkpoint_roots():
+    """通常のモデル一覧の元になるフォルダ。models/Stable-diffusion と --ckpt-dir"""
+    roots = [os.path.abspath(sd_models.model_path)]
+    ckpt_dir = getattr(shared.cmd_opts, "ckpt_dir", None)
+    if ckpt_dir and os.path.isdir(ckpt_dir):
+        roots.append(os.path.abspath(ckpt_dir))
+    return roots
+
+
+def list_active():
+    out = []
+    for root in checkpoint_roots():
+        for rel in list_models_in(root):
+            if rel not in out:
+                out.append(rel)
+    return out
+
+
+def model_file_in(root, rel):
+    """root の中にある rel の絶対パス。フォルダの外を指していたり、なかったりしたら None"""
+    root = os.path.abspath(root)
     path = os.path.abspath(os.path.join(root, rel))
     try:
         inside = path != root and os.path.commonpath([path, root]) == root
     except ValueError:  # Windows で別ドライブ
         inside = False
     return path if inside and os.path.isfile(path) else None
+
+
+def stashed_path(rel):
+    """しまったモデルの絶対パス。フォルダの外を指していたら None"""
+    return model_file_in(stash_dir(), rel)
+
+
+# ---------------------------------------------------------------------------
+# 移動 (しまう / 戻す)
+# ---------------------------------------------------------------------------
+
+def sidecars(model_file):
+    d = os.path.dirname(model_file)
+    stem = os.path.splitext(os.path.basename(model_file))[0]
+    return [p for p in (os.path.join(d, stem + s) for s in SIDECAR_SUFFIXES) if os.path.isfile(p)]
+
+
+def move_keeping_tree(src, src_root, dst_root):
+    """src を src_root からの相対パスを保ったまま dst_root の下へ移動する。
+    付属ファイルも一緒に移動し、途中で失敗したら移動済みの分を元に戻す。
+    戻り値は一緒に移動した付属ファイルの数。"""
+    rel = os.path.relpath(src, src_root)
+    dst_dir = os.path.dirname(os.path.join(dst_root, rel))
+
+    pairs = [(f, os.path.join(dst_dir, os.path.basename(f))) for f in [src] + sidecars(src)]
+    clash = [d for _, d in pairs if os.path.exists(d)]
+    if clash:
+        raise FileExistsError("移動先に同じ名前のファイルがある: " + ", ".join(clash))
+
+    os.makedirs(dst_dir, exist_ok=True)
+    moved = []
+    try:
+        for s, d in pairs:
+            shutil.move(s, d)
+            moved.append((s, d))
+    except Exception:
+        for s, d in reversed(moved):
+            shutil.move(d, s)
+        raise
+    return len(pairs) - 1
+
+
+def is_loaded(path):
+    info = getattr(getattr(shared, "sd_model", None), "sd_checkpoint_info", None)
+    return info is not None and os.path.abspath(info.filename) == os.path.abspath(path)
+
+
+def move_result(message):
+    return (
+        message,
+        gr.update(choices=list_active(), value=None),
+        gr.update(choices=list_stashed(), value=None),
+    )
+
+
+def do_stash(rel):
+    if not rel:
+        return move_result("しまうモデルを選んでね")
+    for root in checkpoint_roots():
+        src = model_file_in(root, rel)
+        if src is not None:
+            break
+    else:
+        return move_result(f"見つからない: `{rel}`")
+
+    loaded = is_loaded(src)
+    try:
+        n = move_keeping_tree(src, root, stash_dir())
+    except Exception as e:
+        return move_result(f"しまえなかった: {e}")
+    sd_models.list_models()
+
+    msg = f"しまった: `{rel}`" + (f"（付属ファイル {n} 個も一緒に）" if n else "")
+    if loaded:
+        msg += "\n\n今読み込んでいるモデルだったので、通常のモデル一覧の 🔄 を押して別のモデルを選んでね"
+    else:
+        msg += "\n\n通常のモデル一覧に反映するには 🔄 を押してね"
+    return move_result(msg)
+
+
+def do_unstash(rel):
+    if not rel:
+        return move_result("戻すモデルを選んでね")
+    src = stashed_path(rel)
+    if src is None:
+        return move_result(f"見つからない: `{rel}`")
+    try:
+        n = move_keeping_tree(src, stash_dir(), os.path.abspath(sd_models.model_path))
+    except Exception as e:
+        return move_result(f"戻せなかった: {e}")
+    sd_models.list_models()
+
+    msg = f"戻した: `{rel}`" + (f"（付属ファイル {n} 個も一緒に）" if n else "")
+    msg += "\n\n通常のモデル一覧に反映するには 🔄 を押してね"
+    return move_result(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -137,15 +259,22 @@ class ModelStashScript(scripts.Script):
     def ui(self, is_img2img):
         with gr.Accordion(EXTENSION_NAME, open=False):
             with gr.Row():
+                active = gr.Dropdown(label="通常のモデル", choices=list_active())
+                stash_btn = gr.Button("しまう")
+            with gr.Row():
                 stashed = gr.Dropdown(label="しまったモデル", choices=list_stashed())
-                refresh_btn = gr.Button("🔄 一覧を更新")
-            override_btn = gr.Button("上書きに設定", interactive=self.override_component is not None)
+                unstash_btn = gr.Button("戻す")
+                override_btn = gr.Button("上書きに設定", interactive=self.override_component is not None)
+            refresh_btn = gr.Button("🔄 一覧を更新")
             status = gr.Markdown(
                 "" if self.override_component is not None
                 else "Override settings 欄が見つからないので、上書きに設定できない"
             )
 
-        refresh_btn.click(lambda: gr.update(choices=list_stashed()), outputs=[stashed])
+        move_outputs = [status, active, stashed]
+        stash_btn.click(do_stash, inputs=[active], outputs=move_outputs)
+        unstash_btn.click(do_unstash, inputs=[stashed], outputs=move_outputs)
+        refresh_btn.click(lambda: move_result(""), outputs=move_outputs)
         if self.override_component is not None:
             override_btn.click(
                 set_override,
