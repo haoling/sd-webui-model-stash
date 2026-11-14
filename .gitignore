@@ -2,10 +2,6 @@
 __pycache__/
 *.py[cod]
 
-# しまっておくモデル (フォルダだけ残す)
-models/*
-!models/.gitkeep
-
 # モデルファイルは誤ってもコミットしない
 *.safetensors
 *.ckpt
