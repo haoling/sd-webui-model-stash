@@ -1,16 +1,17 @@
 import os
 
 import gradio as gr
-from modules import scripts, script_callbacks, shared
+from modules import paths, scripts, script_callbacks, shared
 
 EXTENSION_NAME = "Model Stash"
-BASE_DIR = scripts.basedir()  # この拡張のフォルダ
+DEFAULT_STASH_DIR = os.path.join(paths.models_path, "Stash")  # WebUI の models/Stash
 
 
 def stash_dir():
-    """しまっておくモデルのフォルダ。設定が空なら拡張内の models/ を使う"""
-    d = shared.opts.data.get("model_stash_dir", "")
-    return d if d else os.path.join(BASE_DIR, "models")
+    """しまっておくモデルのフォルダ。設定が空なら WebUI の models/Stash を使い、なければ作る"""
+    d = shared.opts.data.get("model_stash_dir", "") or DEFAULT_STASH_DIR
+    os.makedirs(d, exist_ok=True)
+    return d
 
 
 class ModelStashScript(scripts.Script):
@@ -31,8 +32,9 @@ def on_ui_settings():
     section = ("model_stash", EXTENSION_NAME)
     shared.opts.add_option(
         "model_stash_dir",
-        shared.OptionInfo("", "しまっておくモデルのフォルダ（空なら拡張内の models/）", section=section),
+        shared.OptionInfo("", "しまっておくモデルのフォルダ（空なら WebUI の models/Stash）", section=section),
     )
 
 
 script_callbacks.on_ui_settings(on_ui_settings)
+script_callbacks.on_app_started(lambda *_: stash_dir())

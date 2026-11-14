@@ -17,14 +17,18 @@ Stable Diffusion WebUI (AUTOMATIC1111) 用の拡張機能。
 
 ## モデルの置き場所
 
-この拡張のフォルダの中にある `models/` にモデルを置く。
+WebUI の `models/Stash/` にモデルを置く。フォルダがなければ WebUI の起動時に自動で作られる。
 
 ```
-stable-diffusion-webui/extensions/sd-webui-model-stash/models/
+stable-diffusion-webui/
+└── models/
+    ├── Stable-diffusion/   ← 普段使い（通常のモデル一覧に出る）
+    └── Stash/              ← しまっておくモデル（この拡張の一覧にだけ出る）
 ```
 
-`models/` の中身は git の管理対象外なので、拡張を更新してもモデルは消えない。
+拡張のフォルダとは別の場所なので、拡張を削除・入れ直ししてもモデルは消えない。
 別の場所に置きたい場合は、WebUI の **Settings** → **Model Stash** でフォルダを指定できる。
+ただし `models/Stable-diffusion/` の中（サブフォルダを含む）を指定すると、通常の一覧にも出てしまう。
 
 ## ファイル構成
 
@@ -32,7 +36,6 @@ stable-diffusion-webui/extensions/sd-webui-model-stash/models/
 sd-webui-model-stash/
 ├── scripts/
 │   └── model_stash.py   # WebUI が読み込むスクリプト
-├── models/              # しまっておくモデルの置き場所
 └── README.md
 ```
 
