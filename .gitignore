@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# しまっておくモデル (フォルダだけ残す)
+models/*
+!models/.gitkeep
+
+# モデルファイルは誤ってもコミットしない
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
