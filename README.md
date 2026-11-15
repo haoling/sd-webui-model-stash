@@ -30,6 +30,13 @@ stable-diffusion-webui/
 別の場所に置きたい場合は、WebUI の **Settings** → **Model Stash** でフォルダを指定できる。
 ただし `models/Stable-diffusion/` の中（サブフォルダを含む）を指定すると、通常の一覧にも出てしまう。
 
+## 使い方
+
+txt2img / img2img の下にある **Model Stash** を開く。
+
+- **しまったモデル**：`models/Stash/` に置いたモデルの一覧。サブフォルダの中も表示する
+- **🔄 一覧を更新**：フォルダにモデルを追加・削除したあとに押す
+
 ## ファイル構成
 
 ```

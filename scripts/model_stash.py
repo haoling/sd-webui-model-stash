@@ -5,6 +5,8 @@ from modules import paths, scripts, script_callbacks, shared
 
 EXTENSION_NAME = "Model Stash"
 DEFAULT_STASH_DIR = os.path.join(paths.models_path, "Stash")  # WebUI の models/Stash
+MODEL_EXTS = (".safetensors", ".ckpt")
+VAE_EXTS = (".vae.safetensors", ".vae.ckpt")  # A1111 と同じく VAE はモデル扱いしない
 
 
 def stash_dir():
@@ -12,6 +14,27 @@ def stash_dir():
     d = shared.opts.data.get("model_stash_dir", "") or DEFAULT_STASH_DIR
     os.makedirs(d, exist_ok=True)
     return d
+
+
+def is_model_file(filename):
+    f = filename.lower()
+    return f.endswith(MODEL_EXTS) and not f.endswith(VAE_EXTS)
+
+
+def list_models_in(root):
+    """root 以下のモデルを root からの相対パスで返す"""
+    if not os.path.isdir(root):
+        return []
+    out = []
+    for cur, _, files in os.walk(root, followlinks=True):
+        for f in files:
+            if is_model_file(f):
+                out.append(os.path.relpath(os.path.join(cur, f), root))
+    return sorted(out, key=str.lower)
+
+
+def list_stashed():
+    return list_models_in(stash_dir())
 
 
 class ModelStashScript(scripts.Script):
@@ -24,7 +47,11 @@ class ModelStashScript(scripts.Script):
 
     def ui(self, is_img2img):
         with gr.Accordion(EXTENSION_NAME, open=False):
-            gr.Markdown("開発中")
+            with gr.Row():
+                stashed = gr.Dropdown(label="しまったモデル", choices=list_stashed())
+                refresh_btn = gr.Button("🔄 一覧を更新")
+
+        refresh_btn.click(lambda: gr.update(choices=list_stashed()), outputs=[stashed])
         return []
 
 
