@@ -4,7 +4,6 @@ import gradio as gr
 from modules import hashes, paths, scripts, script_callbacks, sd_models, shared
 
 EXTENSION_NAME = "Model Stash"
-OVERRIDE_ELEM_IDS = ("txt2img_override_settings", "img2img_override_settings")
 OVERRIDE_PREFIX = "Model hash:"
 DEFAULT_STASH_DIR = os.path.join(paths.models_path, "Stash")  # WebUI の models/Stash
 MODEL_EXTS = (".safetensors", ".ckpt")
@@ -118,10 +117,50 @@ def set_override(rel, current):
     return gr.update(value=values, choices=values, visible=True), message
 
 
-class ModelStashScript(scripts.Script):
-    def __init__(self):
-        self.override_component = None
+# ---------------------------------------------------------------------------
+# Override settings 欄とのつなぎ込み
+#
+# Override settings 欄と、この拡張の UI のどちらが先に作られるかは、
+# 設定の「UI item order for txt2img/img2img tabs」などで変わる。
+# どちらが先でも動くよう、欄が見つかった時点とボタンを作った時点の両方でつなぐ。
+# ---------------------------------------------------------------------------
 
+_override_components = {}  # タブ名 -> Override settings 欄
+_pending_wires = {}        # タブ名 -> 欄が見つかったら呼ぶ関数のリスト
+
+
+def _tab_of(component, kwargs):
+    elem_id = getattr(component, "elem_id", None) or kwargs.get("elem_id")
+    for tab in ("txt2img", "img2img"):
+        if elem_id == f"{tab}_override_settings":
+            return tab
+    return None
+
+
+def _on_after_component(component, **kwargs):
+    tab = _tab_of(component, kwargs)
+    if tab is None:
+        return
+    _override_components[tab] = component
+    for wire in _pending_wires.pop(tab, []):
+        wire(component)
+
+
+def _on_before_ui():
+    # 「Reload UI」で作り直すときに、前回の欄を使わないようにする
+    _override_components.clear()
+    _pending_wires.clear()
+
+
+def connect_override(tab, wire):
+    component = _override_components.get(tab)
+    if component is not None:
+        wire(component)
+    else:
+        _pending_wires.setdefault(tab, []).append(wire)
+
+
+class ModelStashScript(scripts.Script):
     def title(self):
         return EXTENSION_NAME
 
@@ -129,29 +168,30 @@ class ModelStashScript(scripts.Script):
         # txt2img / img2img の下に常に表示する
         return scripts.AlwaysVisible
 
-    def after_component(self, component, **kwargs):
-        # Override settings 欄はスクリプトの UI より先に作られるので、ここで捕まえておく
-        if getattr(component, "elem_id", None) in OVERRIDE_ELEM_IDS:
-            self.override_component = component
-
     def ui(self, is_img2img):
+        tab = "img2img" if is_img2img else "txt2img"
         with gr.Accordion(EXTENSION_NAME, open=False):
             with gr.Row():
                 stashed = gr.Dropdown(label="しまったモデル", choices=list_stashed())
                 refresh_btn = gr.Button("🔄 一覧を更新")
-            override_btn = gr.Button("上書きに設定", interactive=self.override_component is not None)
-            status = gr.Markdown(
-                "" if self.override_component is not None
-                else "Override settings 欄が見つからないので、上書きに設定できない"
-            )
+            override_btn = gr.Button("上書きに設定")
+            status = gr.Markdown()
 
         refresh_btn.click(lambda: gr.update(choices=list_stashed()), outputs=[stashed])
-        if self.override_component is not None:
-            override_btn.click(
-                set_override,
-                inputs=[stashed, self.override_component],
-                outputs=[self.override_component, status],
-            )
+
+        connected = {"done": False}
+
+        def wire(component):
+            connected["done"] = True
+            override_btn.click(set_override, inputs=[stashed, component], outputs=[component, status])
+
+        # 最後まで欄が見つからなかったときに、押しても何も起きないままにしない
+        override_btn.click(
+            lambda: gr.update() if connected["done"]
+            else "Override settings 欄が見つからないので、上書きに設定できない",
+            outputs=[status],
+        )
+        connect_override(tab, wire)
         return []
 
     def before_process(self, p, *args):
@@ -170,4 +210,6 @@ def on_ui_settings():
 
 
 script_callbacks.on_ui_settings(on_ui_settings)
+script_callbacks.on_before_ui(_on_before_ui)
+script_callbacks.on_after_component(_on_after_component)
 script_callbacks.on_app_started(lambda *_: stash_dir())
