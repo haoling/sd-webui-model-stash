@@ -10,13 +10,6 @@ DEFAULT_STASH_DIR = os.path.join(paths.models_path, "Stash")  # WebUI の models
 MODEL_EXTS = (".safetensors", ".ckpt")
 VAE_EXTS = (".vae.safetensors", ".vae.ckpt")  # A1111 と同じく VAE はモデル扱いしない
 
-# モデルと一緒に移動する付属ファイル (「モデル名 + これ」という名前のもの)
-SIDECAR_SUFFIXES = (
-    ".yaml", ".json", ".info", ".civitai.info", ".txt",
-    ".png", ".jpg", ".jpeg", ".webp",
-    ".preview.png", ".preview.jpg", ".preview.jpeg", ".preview.webp",
-    ".vae.pt", ".vae.ckpt", ".vae.safetensors",
-)
 
 
 def stash_dir():
@@ -86,9 +79,33 @@ def stashed_path(rel):
 # ---------------------------------------------------------------------------
 
 def sidecars(model_file):
+    """モデルと一緒に移動する付属ファイル。
+    同じフォルダにある「モデル名.〇〇」という名前のファイル全部
+    (BB.safetensors なら BB.json、BB.html、BB.preview.png、BB.vae.safetensors など)。
+    ただし、別のモデル (BB.v2.safetensors など) と、その付属ファイル (BB.v2.json など) は除く。"""
     d = os.path.dirname(model_file)
-    stem = os.path.splitext(os.path.basename(model_file))[0]
-    return [p for p in (os.path.join(d, stem + s) for s in SIDECAR_SUFFIXES) if os.path.isfile(p)]
+    name = os.path.basename(model_file)
+    stem = os.path.splitext(name)[0]
+    prefix = stem + "."
+    try:
+        files = [f for f in os.listdir(d) if f != name and os.path.isfile(os.path.join(d, f))]
+    except OSError:
+        return []
+
+    # 同じフォルダにある、名前が「モデル名.」で始まる別のモデル
+    other_prefixes = [
+        os.path.splitext(f)[0] + "."
+        for f in files
+        if is_model_file(f) and f.startswith(prefix)
+    ]
+    out = []
+    for f in files:
+        if not f.startswith(prefix) or is_model_file(f):
+            continue
+        if any(f.startswith(p) for p in other_prefixes):
+            continue
+        out.append(os.path.join(d, f))
+    return sorted(out)
 
 
 def move_keeping_tree(src, src_root, dst_root):

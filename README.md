@@ -47,7 +47,8 @@ txt2img / img2img の下にある **Model Stash** を開く。
 models/Stable-diffusion/AAA/BB.safetensors  ⇄  models/Stash/AAA/BB.safetensors
 ```
 
-同じフォルダにある同じ名前の付属ファイル（`BB.preview.png`、`BB.yaml`、`BB.civitai.info`、`BB.vae.safetensors` など）も一緒に移動する。
+同じフォルダにある、モデルと同じ名前で拡張子だけが違うファイル（`BB.json`、`BB.html`、`BB.preview.png`、`BB.civitai.info`、`BB.vae.safetensors` など）も、付属ファイルとして一緒に移動する。
+ただし、名前が似ているだけの別のモデル（`BB.v2.safetensors`）と、その付属ファイル（`BB.v2.json` など）は動かさない。
 移動先に同じ名前のファイルがあるときは何もしない。
 移動したあと、通常のモデル一覧に反映するには、そちらの 🔄 を押す。
 
